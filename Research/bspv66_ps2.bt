@@ -1,0 +1,556 @@
+struct LTVector {
+    float x, y, z;
+};
+
+struct LTQuaternion {
+    float x, y, z, w;
+};
+
+struct LTString {
+    short Length;
+    char Value[Length];
+};
+
+typedef uint32 uint32_t;
+
+// NOLF version 66 - PC
+struct WorldHeader {
+    uint32_t Version;
+    uint32_t ObjectDataPosition;
+    uint32_t RenderDataPosition;
+    uint32_t Padding;
+    uint32_t UnkCount;
+    uint32_t UnkDataPointer;
+    uint32_t UnkDataPointer2;
+    uint32_t Dummy[4];
+};
+
+struct WorldInfo {
+    uint32_t Length;
+    char Value[Length];
+    float LMGridSize;
+    LTVector BoundaryMin;
+    LTVector BoundaryMax;
+};
+
+struct WorldTree {
+    LTVector BoxMin;
+    LTVector BoxMax;
+    int NumNodes;
+    int DummyTerrainDepth;
+};
+
+struct WorldProp {
+    short Unknown[4];
+    uchar Padding;
+    short PropNameLength;
+    
+    char PropName[PropNameLength];
+};
+
+
+struct WorldTexture (int NameLength) {
+    char Name[NameLength];
+};
+
+//low=input & 0xff
+//high=(input>>8) & 0xff
+struct HighLowByte {
+    uchar High;
+    uchar Low;
+};
+
+struct Vertex {
+/*
+    union {
+        HighLowByte SplitByte;
+        ushort Bytes;
+    } Bytes;
+*/
+    //ushort Count;
+    uchar Count;
+    //uchar Extra;
+    uchar Unk1; // ?
+};
+
+struct LeafData {
+    short PortalID;
+    ushort Size;
+    uchar Contents[Size];
+};
+
+struct Leaf {
+    ushort LeafListCount;
+
+    if (LeafListCount == 0xFFFF) {
+        ushort LeafListIndex;
+    } else {
+        LeafData Data[LeafListCount]  <optimize=false>;
+    }
+
+    int PolygonCount;
+    char Polygons[PolygonCount * 4] <optimize=false>;
+    int Unk1;
+};
+
+struct Plane {
+    LTVector Normal;
+    float Distance;
+};
+
+struct Surface {
+    LTVector UV1;
+    LTVector UV2;
+    LTVector UV3;
+
+    //ushort Texture;
+    int StartIndex;
+    int Flags; // Gourand Shading 4096 (1<<12) + Normal flags
+    int Texture;
+    //ushort Texture;
+    
+
+    
+    ushort TextureFlags;
+
+    ushort UseEffects;
+    if (UseEffects > 0) {
+        LTString Effect;
+        LTString EffectParam;
+    }
+    //ushort Texture;
+};
+
+struct Point {
+    LTVector Data;
+    float Unk;
+};
+
+struct DiskVert {
+    short Vert;
+    uchar Dummy[2];
+    float Unknown2[2];
+
+    int Unknown3;
+
+    if (ReadInt() > 60000) {
+        int Hack;
+    }
+};
+
+struct PackedDiskVert {
+    int Vert;
+};
+
+struct Polygon (Vertex &VertexInfo) {
+    int Unknown1;
+    
+    uchar LightmapWidth;
+    uchar LightmapHeight;
+
+    char Unknown2;
+    char Unknown3;
+    //short Unknown4;
+    
+    int SurfaceIndex;
+    int PlaneIndex; // Matches with Surface.StartIndex?
+
+    //int Unknown4[2];
+
+    float Unknown5;
+    LTVector Center;   
+    float Unknown6; 
+
+
+};
+
+struct Node {
+    int PolyIndex;
+    int LeafIndex;
+    int NodeIndexes[2];
+};
+
+struct UserPortal {
+    LTString Name;
+    int Unk1;
+    int Unk2;
+    ushort Unk3;
+    LTVector Center;
+    LTVector Dims;
+};
+
+struct PBlockHeader {
+    int Padding;
+    short Size;
+    short Unk1;
+};
+
+struct PBlockTable (int PolyCount) {
+    int Unk1;
+    int Unk2;
+    int Unk3;
+
+    local int Size = Unk1*Unk2*Unk3;
+    
+    LTVector Unk4;
+    LTVector Unk5;
+    uint TotalDataSize;
+    //short Unk1;
+    uchar Block[TotalDataSize * 6] <optimize=false>;
+
+    PBlockHeader BlockHeaders[Size];
+};
+
+struct DiskVertInfo (int Flag, Vertex &VertexInfo) {
+
+    // Check for translucent
+    if ( (Flag & (1<<3)) != 0 ) {
+        local int TRANSLUCENT_FOUND = 1;
+    }
+
+    // Check for flat shading
+    if ( (Flag & (1<<6)) != 0 ) {
+        local int FLAT_SHADING_FOUND = 1;
+    }
+
+    // Check for lightmaps
+    if ( (Flag & (1<<7)) != 0 ) {
+        local int LIGHTMAP_FOUND = 1;
+    }
+    // Check for No Sub Div
+    if ( (Flag & (1<<8)) != 0 ) {
+        local int NO_SUB_DIV_FOUND = 1;
+    }
+
+    
+    // Check if the surface is "invisible"
+    // There's a lot less info to read in, if so!
+    if ( (Flag & (1<<2)) != 0) {
+        PackedDiskVert Verts[VertexInfo.Count];
+    } else {
+        // DiskVert is in proper order but just further down!!!
+        DiskVert Verts[VertexInfo.Count] <optimize=false>;// + VertexInfo.Extra];
+
+    }
+};
+
+struct WorldBSP {
+
+    LTString WorldName;
+
+    int InfoFlags;
+    int Unknown;
+
+    int PointCount; 
+    int PlaneCount;
+    int SurfaceCount;
+    int UserPortalCount;
+    int PolyCount;
+    int LeafCount;
+    int VertCount;
+    int TotalVisListSize;
+    int LeafListCount;
+    int NodeCount;
+    
+    int __ValueIsZero;
+    int __AnItemCount;
+    
+    LTVector MinBox;
+    LTVector MaxBox;
+    LTVector WorldTranslation;
+    
+    // Maybe?
+    uchar TextureNameLength;
+    uchar TextureCount;
+    short Unknown4;
+
+    //WorldTexture WorldTextures(TextureNameLength);
+    Vertex Vertices[PolyCount];
+
+    Leaf LeafList[LeafCount] <optimize=false>;
+    
+    Plane Planes[PlaneCount];
+    Surface Surfaces[SurfaceCount] <optimize=false>;
+
+    local int i = 0;
+    for (i = 0; i < PolyCount; i++) {
+        Polygon Poly(Vertices[i]);
+        DiskVertInfo DiskVerts(Surfaces[Poly.SurfaceIndex].Flags, Vertices[i]);//Vertices[i].Count);
+    }
+
+    Node Nodes[NodeCount];
+    UserPortal Portals[UserPortalCount];
+    Point Points[PointCount];
+    PBlockTable BlockTable(PolyCount);
+    int RootNodeIndex;
+    int Sections;
+};
+
+struct TextureList {
+    int Count;
+    int Size;
+    LTString Textures[Count] <optimize=false>;
+};
+
+struct WorldModel {
+    
+    
+
+    int NextWorldItem;
+    //char Padding2[32];
+    WorldBSP BSPData;
+
+    if (BSPData.Sections > 0) {
+        FSeek(NextWorldItem);
+    }
+
+
+};
+
+struct WorldModelHeader {
+    TextureList Textures;
+
+    int Count;
+    WorldModel model[Count] <optimize=false>;
+};
+
+
+struct WorldTreeNode {
+  int Children;
+    
+};
+/*
+    {  PT_STRING = 0;
+     PT_VECTOR = 1;
+     PT_COLOR = 2;
+     PT_REAL = 3;
+     PT_FLAGS = 4;
+     PT_BOOL = 5;
+     PT_LONGINT = 6;
+     PT_ROTATION = 7;  } 
+*/
+struct ObjectProperty {
+    int NameIndex;
+    char Code;
+    ushort DataLength;
+    
+    switch(Code) {
+        case 0: // String
+        //LTString Value;
+        int Value;
+        break;
+        case 1: // Vector
+        case 2: // Color
+        LTVector Value;
+        break;
+        case 3: // Float
+        float Value;
+        break;
+        case 5: // Bool
+        char Value;
+        break;
+        case 4: // Flags
+        case 6: // Long Int
+        uint Value;
+        break;
+        case 7: // Rotation
+        LTQuaternion Value <bgcolor=0xFF33FF>;
+        break;
+    };
+};
+
+
+struct ObjectStringList {
+    LTString Item;
+};
+
+struct WorldObject {
+    ushort Count;
+    int NameIndex;
+    int PropertyCount;
+/*
+    int Unk3;
+    short Unk4;
+    short Unk5;
+    short PropertyCount2;
+    char Align;
+  */  
+  
+
+    //LTString TypeString;
+    //int PropertyCount;
+    ObjectProperty Properties[PropertyCount] <optimize=false>;
+};
+
+struct WorldObjectHeader {
+    int Count;
+    int Unk1;
+
+    int Unk2;
+    int Unk3;
+    int Unk4;
+    ushort Unk5;
+    ushort Unk6;
+    //ushort Unk7;
+    //char Padding;
+
+    ObjectStringList StringList[Unk1] <optimize=false>;
+
+    WorldObject objects[Count] <optimize=false>;
+};
+
+
+
+struct LightmapFrame {
+    short ModelIndex;
+    short PolyIndex;
+};
+
+struct BatchData (int Size) {
+    uchar Data[Size] <optimize=false>;
+};
+
+struct LightmapBatch (int FrameCount) {
+   local int i = 0;
+    // Frames?
+    for (i = 0; i < FrameCount; i++) {
+        short Size;
+        BatchData Data(Size);
+    } 
+};
+
+struct VertexColours {
+    uchar VertexCount;
+    if (VertexCount == 0) {
+        return;
+    }
+
+    uchar R[VertexCount];
+    uchar G[VertexCount];
+    uchar B[VertexCount];
+};
+
+struct LightmapData {
+    LTString Name;
+    int Type;
+    char BatchCount;
+    short FrameCount;
+    LightmapFrame Frames[FrameCount] <optimize=false>;
+    LightmapBatch Batches(FrameCount)[BatchCount] <optimize=false>;
+    VertexColours Colours[FrameCount] <optimize=false>;
+};
+
+
+
+struct LightmapDataHeader {
+    int TotalFrames1;
+    int TotalAnimations;
+    int TotalMemory;
+    int TotalFrames2;
+    int Count;
+    LightmapData Data[Count] <optimize=false>;
+};
+
+struct RenderData {
+    LightmapDataHeader LightmapHeader;
+};
+
+struct UnkDataItem {
+    LTQuaternion U1;
+    LTVector U2;
+    LTVector U3;
+    LTQuaternion U4;
+};
+
+struct UnkData {
+    int Count;
+    //float Data[Count*13];    
+    UnkDataItem Data[Count];
+};
+
+void subdivide() {
+
+    // We need to set the nodes bounding box here based off the tree's bounding box.
+
+/*
+    // -x -z
+    LTVector firstMin;
+    LTVector firstMax;
+    
+    // -x +z
+    LTVector secondMin;
+    LTVector secondMax;
+
+    // +x -z
+    LTVector thirdMin;
+    LTVector thirdMax;
+
+    // +x +z
+    LTVector forthMin;
+    LTVector forthMax;
+*/
+};
+
+struct DEBUG_BYTE {
+    byte val;
+};
+
+void read_layout(int &current_byte, int &current_bit, int &current_offset, int depth)
+{
+    if (current_bit == 8)
+    {
+        DEBUG_BYTE subdivision_data;
+        current_byte = subdivision_data.val;//ReadByte();
+        current_bit = 0;
+    }
+
+    local int subdivide = false;
+
+    if ((current_byte & (1 << current_bit)) > 0) {
+        subdivide = true;
+    }
+
+    //local int subdivide = (current_byte & (1 << current_bit)) > 0;
+    current_bit++;
+
+    //Printf("Depth %d", depth);
+
+    if (depth > 16) {
+        return;
+    }
+
+    if (subdivide)
+    {
+        local int i = 0;
+
+        subdivide();
+        
+        for ( i = 0; i < 4; i++ )
+        {
+            read_layout(current_byte, current_bit, current_offset, depth + 1);
+        }
+    }
+}
+
+WorldHeader header;
+WorldInfo info;
+WorldTree tree;
+
+
+
+local int currentByte = 0;
+local int currentBit = 8;
+local int currentOffset = 0;
+
+read_layout(currentByte, currentBit, currentOffset, 0);
+
+WorldModelHeader modelHeader;
+
+FSeek(header.ObjectDataPosition);
+
+WorldObjectHeader objectHeader;
+//RenderData renderData;
+
+FSeek(header.UnkDataPointer);
+
+UnkData unk;

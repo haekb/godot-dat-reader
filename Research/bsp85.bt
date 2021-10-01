@@ -96,9 +96,9 @@ struct Leaf {
         LeafData Data[LeafListCount]  <optimize=false>;
     }
 
-    int PolygonCount;
-    char Polygons[PolygonCount * 4] <optimize=false>;
-    int Unk1;
+    //int PolygonCount;
+    //char Polygons[PolygonCount * 4] <optimize=false>;
+    //int Unk1;
 };
 
 struct Surface {
@@ -152,33 +152,6 @@ struct Node {
     int PolyIndex;
     short LeafIndex;
     int NodeIndexes[2];
-};
-
-struct UserPortal {
-    LTString Name;
-    int Unk1;
-    int Unk2;
-    ushort Unk3;
-    LTVector Center;
-    LTVector Dims;
-};
-
-struct PBlock {
-    short Size;
-    short Unk1;
-    uchar Contents[Size * 6];
-};
-
-struct PBlockTable {
-    int Unk1;
-    int Unk2;
-    int Unk3;
-
-    local int Size = Unk1*Unk2*Unk3;
-    
-    LTVector Unk4;
-    LTVector Unk5;
-    PBlock Block[Size] <optimize=false>;
 };
 
 struct WorldBSP {

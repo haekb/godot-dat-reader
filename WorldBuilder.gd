@@ -126,26 +126,22 @@ func build(source_file, options):
 			# Mirror the world a bit to handle Lithtech's style of 3d
 			mesh_instance.scale = Vector3( -1.0, 1.0, 1.0 )
 		# End For
-	
-	while world_model_index < world_model_count:
-		if (world_model_index + batch_by) > world_model_count:
-			batch_by = world_model_count - world_model_index
-
-		var world_models = model.world_model_batch_read(file, batch_by)
-		world_model_index += batch_by
 		
-		var data = fill_array_mesh(model, world_models)
+	# Hack for jupiter
+	if model.is_lithtech_jupiter():
+		var data = fill_array_mesh_jupiter(model, [])
 		var meshes = data[0]
 		var mesh_names = data[1]
 		var tex_names = data[2]
 		var lm_texture_array = data[3] as Image#[0] # data[3] = [ tex array, last used depth ]
-
+		
 		# Loop through our pieces, and add them to mesh instances
-		lm_texture_array.save_png("lm_null.png")
+		#lm_texture_array.save_png("lm_null.png")
 		
 		var lm_image_texture = ImageTexture.new()
-		lm_image_texture.create_from_image(lm_texture_array)
-		lm_image_texture.set_flags(ImageTexture.FLAGS_DEFAULT + ImageTexture.FLAG_ANISOTROPIC_FILTER + ImageTexture.FLAG_CONVERT_TO_LINEAR)
+		#lm_image_texture.create_from_image(lm_texture_array)
+
+		#lm_image_texture.set_flags(ImageTexture.FLAGS_DEFAULT + ImageTexture.FLAG_ANISOTROPIC_FILTER + ImageTexture.FLAG_CONVERT_TO_LINEAR)
 		
 		var cached_textures = {}
 		
@@ -161,7 +157,7 @@ func build(source_file, options):
 			mat.shader = load("res://Addons/LTDatReader/Shaders/LT1.tres") as VisualShader
 			
 			mat.set_shader_param("main_texture", tex)
-			mat.set_shader_param("lm_texture", lm_image_texture)
+			#mat.set_shader_param("lm_texture", lm_image_texture)
 
 			mesh_instance.name = mesh_names[i]
 			mesh_instance.mesh = mesh
@@ -174,7 +170,56 @@ func build(source_file, options):
 			# Mirror the world a bit to handle Lithtech's style of 3d
 			mesh_instance.scale = Vector3( -1.0, 1.0, 1.0 )
 		# End For
-	
+
+	if !model.is_lithtech_jupiter():
+		while world_model_index < world_model_count:
+			if (world_model_index + batch_by) > world_model_count:
+				batch_by = world_model_count - world_model_index
+
+			var world_models = model.world_model_batch_read(file, batch_by)
+			world_model_index += batch_by
+			
+			var data = fill_array_mesh(model, world_models)
+			var meshes = data[0]
+			var mesh_names = data[1]
+			var tex_names = data[2]
+			var lm_texture_array = data[3] as Image#[0] # data[3] = [ tex array, last used depth ]
+
+			# Loop through our pieces, and add them to mesh instances
+			lm_texture_array.save_png("lm_null.png")
+			
+			var lm_image_texture = ImageTexture.new()
+			lm_image_texture.create_from_image(lm_texture_array)
+			lm_image_texture.set_flags(ImageTexture.FLAGS_DEFAULT + ImageTexture.FLAG_ANISOTROPIC_FILTER + ImageTexture.FLAG_CONVERT_TO_LINEAR)
+			
+			var cached_textures = {}
+			
+			var i = 0;
+			for mesh in meshes:
+				
+				var mesh_instance = MeshInstance.new()
+				
+				var tex_name = tex_names[i]
+				var tex = get_texture(tex_name)
+				
+				var mat = ShaderMaterial.new()
+				mat.shader = load("res://Addons/LTDatReader/Shaders/LT1.tres") as VisualShader
+				
+				mat.set_shader_param("main_texture", tex)
+				mat.set_shader_param("lm_texture", lm_image_texture)
+
+				mesh_instance.name = mesh_names[i]
+				mesh_instance.mesh = mesh
+				root.add_child(mesh_instance)
+				mesh_instance.owner = root
+				mesh_instance.set_surface_material(0, mat)
+				i += 1
+				total_mesh_count+=1
+				
+				# Mirror the world a bit to handle Lithtech's style of 3d
+				mesh_instance.scale = Vector3( -1.0, 1.0, 1.0 )
+			# End For
+		
 	# Pack our scene!
 	scene.pack(root)
 	
@@ -261,9 +306,167 @@ func build_array_mesh(textured_meshes):
 		mesh_names.append("World Model")#world_model.world_name)
 	# End For
 
+	var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
+	
+	print("Exporting obj...")
+	obj_exporter.export_mesh(meshes, "./test.obj", true)
+	print("Finished!")
 	
 	return [ meshes, mesh_names, texture_references ]
+	
+func build_array_mesh_jupiter(textured_meshes):
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var meshes = []
+	var texture_references = []
+	var mesh_names = []
 
+	for texture in textured_meshes.keys():
+		var batches = textured_meshes[texture]
+		
+		var commit_mesh = null
+		var combined_mesh = null
+		
+		for mesh in batches:
+			var mesh_uvs = mesh[0]
+			var mesh_normals = mesh[1]
+			var mesh_verts = mesh[2]
+			var mesh_colours = mesh[3]
+			var mesh_uvs2 = mesh[5]
+			
+#			st.add_normal(mesh_normals[0])
+#			st.add_uv(mesh_uvs[0])
+#			st.add_vertex(mesh_verts[0])
+#
+#			st.add_normal(mesh_normals[1])
+#			st.add_uv(mesh_uvs[1])
+#			st.add_vertex(mesh_verts[1])
+#
+#			st.add_normal(mesh_normals[2])
+#			st.add_uv(mesh_uvs[2])
+#			st.add_vertex(mesh_verts[2])
+			
+			# Mesh is formatted in triangle fan segments per "EditPoly"
+			st.add_triangle_fan( PoolVector3Array(mesh_verts), PoolVector2Array(mesh_uvs), PoolColorArray(mesh_colours), PoolVector2Array(mesh_uvs2), PoolVector3Array(mesh_normals) )
+		# End For
+		
+		meshes.append(st.commit())
+		
+		st.clear()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		texture_references.append(texture)
+		mesh_names.append("World Model")#world_model.world_name)
+	# End For
+
+	var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
+	
+	print("Exporting obj...")
+	obj_exporter.export_mesh(meshes, "./test.obj", true)
+	print("Finished!")
+	
+	return [ meshes, mesh_names, texture_references ]
+	
+func fill_array_mesh_jupiter(model, world_meshes = []):
+	var meshes = []
+	var mesh_names = []
+	var texture_references = []
+	var textured_meshes = {}
+	
+	var triangle_counter = 0
+	var texture_references_per_triangle = []
+	
+	var texture_name = ""
+	var prev_texture_name = ""
+
+	for i in range(0, len(model.render_data.render_blocks)):
+		var block = model.render_data.render_blocks[i]
+		texture_references_per_triangle = []
+		
+		mesh_names.append("RenderBlock %d" % i)
+		
+		var previous_tri_count = 0
+		for j in range(0, len(block.sections)):
+			var section = block.sections[j]
+#			texture_references_per_triangle.append({
+#				"tri_start": j,
+#				"tri_end": j + section.triangle_count,
+#				"textures": section.textures, 
+#			})
+			for k in range(previous_tri_count, section.triangle_count):
+				texture_references_per_triangle.append(section.textures)
+		
+		var verts = []#PoolVector3Array()
+		var uvs = []#PoolVector2Array()
+		var uvs2 = []
+		var normals = []#PoolVector3Array()
+		var colours = []
+		var indices = PoolIntArray()
+		var polies = []
+		
+		for j in range(0, len(block.triangles)):
+			var triangle = block.triangles[j]
+			
+			verts.append(triangle.render_vertices[0].pos)
+			verts.append(triangle.render_vertices[1].pos)
+			verts.append(triangle.render_vertices[2].pos)
+			
+			uvs.append(triangle.render_vertices[0].uv1)
+			uvs.append(triangle.render_vertices[1].uv1)
+			uvs.append(triangle.render_vertices[2].uv1)
+			
+			normals.append(triangle.render_vertices[0].normal)
+			normals.append(triangle.render_vertices[1].normal)
+			normals.append(triangle.render_vertices[2].normal)
+			
+			texture_references.append(texture_references_per_triangle[j][0])
+			texture_name = texture_references_per_triangle[j][0] # Grab the first texture for now..
+			
+			if prev_texture_name == "":
+				prev_texture_name = texture_name
+			
+			# Texture change? Flush!
+			if prev_texture_name != texture_name:
+#				verts.invert()
+#				normals.invert()
+#				uvs.invert()
+#				uvs2.invert()
+#				colours.invert()
+				
+				# Add it to the batch!
+				if prev_texture_name in textured_meshes:
+					textured_meshes[prev_texture_name].append([ uvs, normals, verts, colours, [], [] ])
+				else:
+					textured_meshes[prev_texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
+				prev_texture_name = texture_name
+				
+				verts = []
+				uvs = []
+				normals = []
+				colours = []
+						
+			#colours.append(255)
+			#colours.append(triangle.render_vertices[0].colour)
+			#colours.append(triangle.render_vertices[1].colour)
+			#colours.append(triangle.render_vertices[2].colour)
+			
+		# Note : Disabled while debugging vertex order
+#		# Add it to the batch! (Last one!)
+#		if texture_name in textured_meshes:
+#			textured_meshes[texture_name].append([ uvs, normals, verts, colours, [], [] ])
+#		else:
+#			textured_meshes[texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
+
+			
+		var data = build_array_mesh_jupiter(textured_meshes)
+		meshes += data[0]
+		mesh_names += data[1]
+		texture_references += data[2]
+		textured_meshes = []
+	
+	# Texture References is polygon aligned
+	return [ meshes, mesh_names, texture_references, null ]
+	
+	pass
 
 func fill_array_mesh(model, world_models = []):
 	var mesh_names = []

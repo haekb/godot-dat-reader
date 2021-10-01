@@ -10,6 +10,8 @@ class DAT:
 	# Lithtech 2.0 - Talon
 	const DAT_VERSION_NOLF = 66
 	const DAT_VERSION_AVP2 = 70
+	# Lithtech Jupiter
+	const DAT_VERSION_JUPITER = 85
 	
 	const PLATFORM = "PC"
 	
@@ -17,6 +19,12 @@ class DAT:
 	var version = 0
 	var object_data_pos = 0
 	var render_data_pos = 0
+	
+	# Lithtech Jupiter only!
+	var blind_object_data_pos = 0
+	var light_grid_pos = 0
+	var collision_data_pos = 0
+	var particle_blocker_data_pos = 0
 	
 	# World Info
 	var world_info = null
@@ -32,6 +40,9 @@ class DAT:
 	var lightmap_data = null
 	
 	var world_object_data = null
+	
+	# Jupiter only!~
+	var render_data = null 
 	
 	# Scratch
 	var current_poly_index = 0
@@ -75,17 +86,37 @@ class DAT:
 		return [ DAT_VERSION_AVP2 ].has(self.version)
 	# End If
 	
+	func is_lithtech_jupiter():
+		return [ DAT_VERSION_JUPITER ].has(self.version)
+		
+	func is_supported():
+		return [
+			DAT_VERSION_LT1, 
+			DAT_VERSION_LT15, 
+			DAT_VERSION_PSYCHO, 
+			DAT_VERSION_NOLF, 
+			DAT_VERSION_AVP2, 
+			DAT_VERSION_JUPITER
+			].has(self.version)
+	
 	func read(f : File, dont_import_world_models = false):
 		
 		self.version = f.get_32()
 		
 		print("DAT Version: %d" % self.version)
 				
-		if [DAT_VERSION_LT1, DAT_VERSION_LT15, DAT_VERSION_PSYCHO, DAT_VERSION_NOLF, DAT_VERSION_AVP2].has(self.version) == false:
+		if self.is_supported() == false:
 			return self._make_response(IMPORT_RETURN.ERROR, 'Unsupported file version (%d)' % self.version)
 		# End If
 				
 		self.object_data_pos = f.get_32()
+		
+		if is_lithtech_jupiter():
+			self.blind_object_data_pos = f.get_32()
+			self.light_grid_pos = f.get_32()
+			self.collision_data_pos = f.get_32()
+			self.particle_blocker_data_pos = f.get_32()
+		
 		self.render_data_pos = f.get_32()
 		
 		if !is_lithtech_1():
@@ -108,21 +139,26 @@ class DAT:
 		# Lithtech 1.0 --
 		# Render data doesn't exist in it's own section
 		# And object data comes before world models!
-		if !is_lithtech_1() && self.render_data_pos != f.get_len():
+		if (!is_lithtech_1() && !is_lithtech_jupiter()) && self.render_data_pos != f.get_len():
 			f.seek(self.render_data_pos)
 			
 			self.lightmap_data = WorldLightMaps.new()
 			self.lightmap_data.read(self, f)
+			
+		if is_lithtech_jupiter():
+			f.seek(self.render_data_pos)
+			
+			self.render_data = RenderData.new()
+			self.render_data.read(self, f)
 		
-			# Another detour to object data...
-			f.seek(self.object_data_pos)
+		# Another detour to object data...
+		f.seek(self.object_data_pos)
 		
 		world_object_data = WorldObjectHeader.new()
 		world_object_data.read(self, f)
 		
-		if !is_lithtech_1():
-			# Okay back to world models
-			f.seek(world_model_pos)
+		# Okay back to world models
+		f.seek(world_model_pos)
 			
 		if is_lithtech_1():
 			# Read the "root" world model
@@ -146,8 +182,9 @@ class DAT:
 		for _i in range(amount_to_read):
 			var next_world_model_pos = f.get_32()
 			
-			# Byte array?
-			var unk_dummy = f.get_buffer(32)
+			if !is_lithtech_jupiter():
+				# Byte array?
+				var unk_dummy = f.get_buffer(32)
 			
 			var world_bsp = WorldBSP.new()
 			world_bsp.read(self, f)
@@ -228,6 +265,8 @@ class DAT:
 		var extents_min = Vector3()
 		var extents_max = Vector3()
 		
+		var world_offset = Vector3()
+		
 		func read(dat : DAT, f : File):
 			self.properties = dat.read_string(f, false)
 			
@@ -241,9 +280,15 @@ class DAT:
 				f.seek(f.get_position() + 8 * 4)
 				return
 			
-			self.light_map_grid_size = f.get_float()
+			if !dat.is_lithtech_jupiter():
+				self.light_map_grid_size = f.get_float()
+			
 			self.extents_min = dat.read_vector3(f)
 			self.extents_max = dat.read_vector3(f)
+			
+			if dat.is_lithtech_jupiter():
+				self.world_offset = dat.read_vector3(f)
+			
 		# End Func
 	
 	class WorldTree:
@@ -388,6 +433,10 @@ class DAT:
 					data.append(leaf_data)
 				# End For
 			# End If
+			
+			# No extra data here in jupiter!
+			if dat.is_lithtech_jupiter():
+				return
 				
 			if dat.is_lithtech_1():
 				self.polygon_count = f.get_16()
@@ -430,6 +479,14 @@ class DAT:
 		# End Func
 		
 		func read(dat: DAT, f : File):
+			
+			# Short and sweet, most of the data is in render data..
+			if dat.is_lithtech_jupiter():
+				self.flags = f.get_32()
+				self.texture_index = f.get_16()
+				self.texture_flags = f.get_16()
+				return
+			
 			self.uv1 = dat.read_vector3(f)
 			self.uv2 = dat.read_vector3(f)
 			self.uv3 = dat.read_vector3(f)
@@ -483,6 +540,10 @@ class DAT:
 			# End Func
 			
 			func read(dat: DAT, f : File):
+				if dat.is_lithtech_jupiter():
+					self.vertex_index = f.get_32()
+					return
+					
 				self.vertex_index = f.get_16()
 				self.dummy = Array(f.get_buffer(3))
 				
@@ -512,6 +573,17 @@ class DAT:
 		var lightmap_texture = null
 		
 		func read(dat: DAT, f: File, vert_count = 0):
+			if dat.is_lithtech_jupiter():
+				self.surface_index = f.get_32()
+				self.plane_index = f.get_32()
+				self.disk_verts
+				for _i in range(vert_count):
+					var disk_vert = WorldPoly.DiskVert.new()
+					disk_vert.read(dat, f)
+					disk_verts.append(disk_vert)
+				# End For
+				return
+				
 			
 			if !dat.is_lithtech_1():
 				self.center = dat.read_vector3(f)
@@ -761,7 +833,7 @@ class DAT:
 			
 			self.world_info_flags = f.get_32()
 			
-			if !dat.is_lithtech_1():
+			if !dat.is_lithtech_1() and !dat.is_lithtech_jupiter():
 				var unknown_value = f.get_32()
 			# End If
 			
@@ -783,15 +855,20 @@ class DAT:
 			self.leaf_list_count = f.get_32()
 			self.node_count = f.get_32()
 			
-			var unknown_value_2 = f.get_32()
+			if !dat.is_lithtech_jupiter():
+				var unknown_value_2 = f.get_32()
 			
-			if !dat.is_lithtech_1():
+			if !dat.is_lithtech_1() and !dat.is_lithtech_jupiter():
 				var unknown_value_3 = f.get_32()
 			# End If
+			
+			debug_ftell = f.get_position()
 			
 			self.min_box = dat.read_vector3(f)
 			self.max_box = dat.read_vector3(f)
 			self.world_translation = dat.read_vector3(f)
+			
+			debug_ftell = f.get_position()
 			
 			self.name_length = f.get_32()
 			self.texture_count = f.get_32()
@@ -806,7 +883,8 @@ class DAT:
 			# Not sure why it's poly count..
 			for _i in range(self.poly_count):
 				var vert = f.get_8()
-				vert += f.get_8()
+				if !dat.is_lithtech_jupiter():
+					vert += f.get_8()
 				self.verts.append(vert)
 			# End For
 
@@ -861,11 +939,11 @@ class DAT:
 				self.user_portals.append(portal)
 			# End For
 			
-			if dat.is_lithtech_1() || dat.is_lithtech_2():
+			if !dat.is_lithtech_talon():
 				for _i in range(self.point_count):
 					self.points.append(dat.read_vector3(f))
 					
-					if dat.version == DAT_VERSION_NOLF:
+					if dat.is_lithtech_2():
 						var normal = dat.read_vector3(f)
 					# End If
 				# End For
@@ -873,8 +951,9 @@ class DAT:
 			
 			var debug_ftell2 = f.get_position()
 			
-			self.block_table = WorldPBlockTable.new()
-			self.block_table.read(dat, f)
+			if !dat.is_lithtech_jupiter():
+				self.block_table = WorldPBlockTable.new()
+				self.block_table.read(dat, f)
 			
 			self.root_node = WorldNode.new()
 			self.root_node.index = f.get_32()
@@ -1228,3 +1307,113 @@ class DAT:
 		# End Func
 	# End Class
 
+	class RenderData:
+		# Jupiter only!
+		var render_block_count = 0
+		var render_blocks = []
+		
+		# Missing: SkyPortals, Occulders, LightGroups
+		# We don't need 'em right now!
+		
+		class RenderSection:
+			var textures = []
+			var shader_code = 0
+			var triangle_count = 0
+			var texture_effect = ""
+			var lightmap_width
+			var lightmap_height
+			var lightmap_size
+			var lightmap_data = []
+			
+			func read(dat : DAT, f : File):
+				self.textures = [
+					dat.read_string(f),
+					dat.read_string(f)
+				]
+				
+				self.shader_code = f.get_8()
+				self.triangle_count = f.get_32()
+				self.texture_effect = dat.read_string(f)
+				self.lightmap_width = f.get_32()
+				self.lightmap_height = f.get_32()
+				self.lightmap_size = f.get_32()
+				self.lightmap_data = f.get_buffer(self.lightmap_size)
+		
+		class RenderVertex:
+			var pos = Vector3()
+			var uv1 = Vector2()
+			var uv2 = Vector2()
+			var colour = 0 # Packed colour!
+			var normal = Vector3()
+			
+			func read(dat : DAT, f : File):
+				self.pos = dat.read_vector3(f)
+				self.uv1 = dat.read_vector2(f)
+				self.uv2 = dat.read_vector2(f)
+				self.colour = f.get_32()
+				self.normal = dat.read_vector3(f)
+		
+		class RenderTriangle:
+			var index0 = 0
+			var index1 = 0
+			var index2 = 0
+			var poly_index = 0
+			
+			var render_vertices = []
+			
+			func read(dat : DAT, f : File, block : RenderBlock):
+				self.index0 = f.get_32()
+				self.index1 = f.get_32()
+				self.index2 = f.get_32()
+				self.poly_index = f.get_32()
+				
+				# Fill out some references
+				self.render_vertices = [
+					block.vertices[self.index0],
+					block.vertices[self.index1],
+					block.vertices[self.index2],
+				]
+
+		class RenderBlock:
+			var center = Vector3()
+			var half_dims = Vector3()
+			var section_count = 0
+			var vertex_count = 0
+			var triangle_count = 0
+			
+			var sections = []
+			var vertices = []
+			var triangles = []
+			
+			func read(dat : DAT, f : File):
+				self.center = dat.read_vector3(f)
+				self.half_dims = dat.read_vector3(f)
+				
+				self.section_count = f.get_32()
+				for i in range(self.section_count):
+					var section = RenderSection.new()
+					section.read(dat, f)
+					self.sections.append(section)
+				
+				self.vertex_count = f.get_32()
+				for i in range(self.vertex_count):
+					var vertex = RenderVertex.new()
+					vertex.read(dat, f)
+					self.vertices.append(vertex)
+				
+				self.triangle_count = f.get_32()
+				for i in range(self.triangle_count):
+					var triangle = RenderTriangle.new()
+					triangle.read(dat, f, self)
+					self.triangles.append(triangle)
+				
+				pass
+			# End Func
+			
+		func read(dat : DAT, f : File):
+			self.render_block_count = f.get_32()
+			for i in range(self.render_block_count):
+				var block = RenderBlock.new()
+				block.read(dat, f)
+				self.render_blocks.append(block)
+	# End Class

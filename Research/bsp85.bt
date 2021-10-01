@@ -1,0 +1,516 @@
+struct LTUV {
+    float u, v;
+};
+
+struct LTVector {
+    float x, y, z;
+};
+
+struct LTQuaternion {
+    float x, y, z, w;
+};
+
+struct LTPlane {
+    LTVector Normal;
+    float Dist;
+};
+
+struct LTString {
+    short Length;
+    char Value[Length];
+};
+
+typedef uint32 uint32_t;
+
+// NOLF2 version 85 - PC
+struct WorldHeader {
+    uint32_t Version;
+    uint32_t ObjectDataPosition;
+    uint32_t BlindObjectDataPosition;
+    uint32_t LightGridPosition;
+    uint32_t CollisionDataPosition;
+    uint32_t ParticleBlockerDataPosition;
+    uint32_t RenderDataPosition;
+    uint32_t Dummy[8];
+};
+
+struct WorldInfo {
+    uint32_t Length;
+    char Value[Length];
+    LTVector BoundaryMin;
+    LTVector BoundaryMax;
+    LTVector WorldOffset;
+};
+
+struct WorldTree {
+    LTVector BoxMin;
+    LTVector BoxMax;
+    int NumNodes;
+    int DummyTerrainDepth;
+};
+
+struct WorldProp {
+    short Unknown[4];
+    uchar Padding;
+    short PropNameLength;
+    
+    char PropName[PropNameLength];
+};
+
+
+struct WorldTexture (int NameLength) {
+    char Name[NameLength];
+};
+
+//low=input & 0xff
+//high=(input>>8) & 0xff
+struct HighLowByte {
+    uchar High;
+    uchar Low;
+};
+
+struct Vertex {
+/*
+    union {
+        HighLowByte SplitByte;
+        ushort Bytes;
+    } Bytes;
+*/
+    //ushort Count;
+    uchar Count;
+    //uchar Extra;
+};
+
+struct LeafData {
+    short PortalID;
+    ushort Size;
+    uchar Contents[Size];
+};
+
+struct Leaf {
+    ushort LeafListCount;
+
+    if (LeafListCount == 0xFFFF) {
+        ushort LeafListIndex;
+    } else {
+        LeafData Data[LeafListCount]  <optimize=false>;
+    }
+
+    int PolygonCount;
+    char Polygons[PolygonCount * 4] <optimize=false>;
+    int Unk1;
+};
+
+struct Surface {
+/*
+    LTVector UV1;
+    LTVector UV2;
+    LTVector UV3;
+*/
+    uint Flags;
+    ushort Texture;
+    ushort TextureFlags;
+};
+
+struct Point {
+    LTVector Data;
+};
+
+struct DiskVert {
+    short Verts;
+    uchar Dummy[3];
+};
+
+#define MAX_WORLDPOLY_VERTS 40
+struct Polygon (Vertex &VertexInfo) {
+/*
+    LTVector Center;
+    short LightmapWidth;
+    short LightmapHeight;
+
+    short Unknown;
+    if (Unknown > 0) {
+        short MoreUnknown[Unknown * 2];
+    }
+
+    int SurfaceIndex;
+    int PlaneIndex;
+    
+    LTVector UV1;
+    LTVector UV2;
+    LTVector UV3;
+
+    DiskVert Verts[VertexInfo.Count + VertexInfo.Extra];
+*/
+    uint32 SurfaceIndex;
+    uint32 PlaneIndex;
+    uint32 Verts[VertexInfo.Count];
+
+};
+
+struct Node {
+    int PolyIndex;
+    short LeafIndex;
+    int NodeIndexes[2];
+};
+
+struct UserPortal {
+    LTString Name;
+    int Unk1;
+    int Unk2;
+    ushort Unk3;
+    LTVector Center;
+    LTVector Dims;
+};
+
+struct PBlock {
+    short Size;
+    short Unk1;
+    uchar Contents[Size * 6];
+};
+
+struct PBlockTable {
+    int Unk1;
+    int Unk2;
+    int Unk3;
+
+    local int Size = Unk1*Unk2*Unk3;
+    
+    LTVector Unk4;
+    LTVector Unk5;
+    PBlock Block[Size] <optimize=false>;
+};
+
+struct WorldBSP {
+    int InfoFlags;
+    LTString WorldName;
+
+    int PointCount; 
+    int PlaneCount;
+    int SurfaceCount;
+    int UserPortalCount;
+    int PolyCount;
+    int LeafCount;
+    int VertCount;
+    int TotalVisListSize;
+    int LeafListCount;
+    int NodeCount;
+    
+    LTVector MinBox;
+    LTVector MaxBox;
+    LTVector WorldTranslation;
+    
+    int TextureNameLength;
+    int TextureCount;
+
+    WorldTexture WorldTextures(TextureNameLength);
+    Vertex Vertices[PolyCount];
+
+    Leaf LeafList[LeafCount] <optimize=false>;
+    
+    LTPlane Planes[PlaneCount];
+    Surface Surfaces[SurfaceCount] <optimize=false>;
+    //Point Points[PointCount];
+
+    local int i = 0;
+    for (i = 0; i < PolyCount; i++) {
+        Polygon Poly(Vertices[i]);
+    }
+
+    Node Nodes[NodeCount];
+
+    Point Points[PointCount];
+    //UserPortal Portals[UserPortalCount];
+    //PBlockTable BlockTable;
+    int RootNodeIndex;
+    int Sections;
+};
+
+struct WorldModel {
+    int NextWorldItem;
+    WorldBSP BSPData;
+
+    if (BSPData.Sections > 0) {
+        FSeek(NextWorldItem);
+    }
+
+
+};
+
+struct WorldModelHeader {
+    int Count;
+    WorldModel model[Count] <optimize=false>;
+};
+
+
+struct WorldTreeNode {
+  int Children;
+    
+};
+/*
+    {  PT_STRING = 0;
+     PT_VECTOR = 1;
+     PT_COLOR = 2;
+     PT_REAL = 3;
+     PT_FLAGS = 4;
+     PT_BOOL = 5;
+     PT_LONGINT = 6;
+     PT_ROTATION = 7;  } 
+*/
+struct ObjectProperty {
+    LTString Name;
+    char Code;
+    int Flags;
+    short DataLength;
+    
+    switch(Code) {
+        case 0: // String
+        LTString Value;
+        break;
+        case 1: // Vector
+        case 2: // Color
+        LTVector Value;
+        break;
+        case 3: // Float
+        float Value;
+        break;
+        case 5: // Bool
+        char Value;
+        break;
+        case 4: // Flags
+        case 6: // Long Int
+        uint Value;
+        break;
+        case 7: // Rotation
+        LTQuaternion Value;
+        break;
+    };
+};
+
+struct WorldObject {
+    ushort DataLength;
+    LTString TypeString;
+    int PropertyCount;
+    ObjectProperty Properties[PropertyCount] <optimize=false>;
+};
+
+struct WorldObjectHeader {
+    int Count;
+    WorldObject objects[Count] <optimize=false>;
+};
+
+
+
+struct LightmapFrame {
+    short ModelIndex;
+    short PolyIndex;
+};
+
+struct BatchData (int Size) {
+    uchar Data[Size] <optimize=false>;
+};
+
+struct LightmapBatch (int FrameCount) {
+   local int i = 0;
+    // Frames?
+    for (i = 0; i < FrameCount; i++) {
+        short Size;
+        BatchData Data(Size);
+    } 
+};
+
+struct VertexColours {
+    uchar VertexCount;
+    if (VertexCount == 0) {
+        return;
+    }
+
+    uchar R[VertexCount];
+    uchar G[VertexCount];
+    uchar B[VertexCount];
+};
+
+
+struct RenderSection {
+    LTString TextureNames[2] <optimize=false>;
+    uchar ShaderCode;
+    uint32 TriCount;
+    LTString TextureEffect;
+    uint32 LightmapWidth;
+    uint32 LightmapHeight;
+    uint32 LightmapSize;
+    uchar LightmapData[LightmapSize];
+
+};
+
+struct SRBVertex {
+    LTVector Pos;
+    LTUV UV1;
+    LTUV UV2;
+    uint32 Colour;
+    LTVector Normal;
+};
+
+struct RenderTriangles {
+    uint32 Index0;
+    uint32 Index1;
+    uint32 Index2;
+    uint32 PolyIndex;
+};
+
+/*
+struct SRBGeometryPoly {
+    	TVertList m_aVerts;
+	LTPlane m_cPlane;
+	EAABBCorner m_ePlaneCorner;
+	LTVector m_vMin, m_vMax;
+};
+*/
+
+struct SRBGeometryPoly {
+    uchar VertCount;
+    LTVector Verts[VertCount];
+    LTPlane Plane;
+    //uint32 PlaneCorner;
+    //LTVector Min, Max;
+};
+
+struct SRCOcculder {
+    uint32 ID;
+    uchar Enabled;
+};
+
+struct SSubLM {
+    uint32 Left;
+    uint32 Top;
+    uint32 Width;
+    uint32 Height;
+    uint32 DataSize;
+    uchar Data[DataSize];
+};
+
+struct SSubLMHeader {
+    uint32 Count;
+    SSubLM SubLM[Count] <optimize=false>;
+};
+
+struct SRBLightGroup {
+    uint16 Length;
+    uchar NextChar[Length];
+    LTVector Colour;
+    uint32 DataLength;
+    uchar Data[DataLength];
+    uint32 SectionLMSize;
+    SSubLMHeader SubLM[SectionLMSize] <optimize=false>; 
+
+};
+
+struct RenderBlock {
+    LTVector Center;
+    LTVector HalfDims;
+    uint32 SectionCount;
+    RenderSection Sections[SectionCount] <optimize=false>;
+    uint32 VertexCount;
+    SRBVertex Vertices[VertexCount] <optimize=false>;
+    uint32 TriCount;
+    RenderTriangles Triangles[TriCount] <optimize=false>;
+    uint32 SkyPortalCount;
+    SRBGeometryPoly SkyPortals[SkyPortalCount] <optimize=false>;
+    uint32 OcculderCount;
+    SRCOcculder Occulders[OcculderCount];
+    uint32 LightGroupCount;
+    SRBLightGroup LightGroup[LightGroupCount] <optimize=false>;
+    uchar ChildFlags;
+    uint32 ChildIndexes[2];
+};
+
+struct RenderData {
+    uint32 RenderBlockCount;
+    RenderBlock blocks[RenderBlockCount] <optimize=false>;
+    //LightmapDataHeader LightmapHeader;
+};
+
+void subdivide() {
+
+    // We need to set the nodes bounding box here based off the tree's bounding box.
+
+/*
+    // -x -z
+    LTVector firstMin;
+    LTVector firstMax;
+    
+    // -x +z
+    LTVector secondMin;
+    LTVector secondMax;
+
+    // +x -z
+    LTVector thirdMin;
+    LTVector thirdMax;
+
+    // +x +z
+    LTVector forthMin;
+    LTVector forthMax;
+*/
+};
+
+struct DEBUG_BYTE {
+    byte val;
+};
+
+void read_layout(int &current_byte, int &current_bit, int &current_offset, int depth)
+{
+    if (current_bit == 8)
+    {
+        DEBUG_BYTE subdivision_data;
+        current_byte = subdivision_data.val;//ReadByte();
+        current_bit = 0;
+    }
+
+    local int subdivide = false;
+
+    if ((current_byte & (1 << current_bit)) > 0) {
+        subdivide = true;
+    }
+
+    //local int subdivide = (current_byte & (1 << current_bit)) > 0;
+    current_bit++;
+
+    //Printf("Depth %d", depth);
+
+    if (depth > 16) {
+        return;
+    }
+
+    if (subdivide)
+    {
+        local int i = 0;
+
+        subdivide();
+        
+        for ( i = 0; i < 4; i++ )
+        {
+            read_layout(current_byte, current_bit, current_offset, depth + 1);
+        }
+    }
+}
+
+WorldHeader header;
+WorldInfo info;
+WorldTree tree;
+
+
+
+local int currentByte = 0;
+local int currentBit = 8;
+local int currentOffset = 0;
+
+read_layout(currentByte, currentBit, currentOffset, 0);
+
+WorldModelHeader modelHeader;
+
+
+WorldObjectHeader objectHeader;
+
+FSeek(header.RenderDataPosition);
+RenderData renderData;
+

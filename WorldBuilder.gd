@@ -306,14 +306,15 @@ func build_array_mesh(textured_meshes):
 		mesh_names.append("World Model")#world_model.world_name)
 	# End For
 
-	var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
+	#var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
 	
-	print("Exporting obj...")
-	obj_exporter.export_mesh(meshes, "./test.obj", true)
-	print("Finished!")
+	#print("Exporting obj...")
+	#obj_exporter.export_mesh(meshes, "./test.obj", true)
+	#print("Finished!")
 	
 	return [ meshes, mesh_names, texture_references ]
 	
+# Jupiter uses triangle lists
 func build_array_mesh_jupiter(textured_meshes):
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -369,11 +370,11 @@ func build_array_mesh_jupiter(textured_meshes):
 		mesh_names.append("World Model")#world_model.world_name)
 	# End For
 
-	var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
+	#var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
 	
-	print("Exporting obj...")
-	obj_exporter.export_mesh(meshes, "./test.obj", true)
-	print("Finished!")
+	#print("Exporting obj...")
+	#obj_exporter.export_mesh(meshes, "./test.obj", true)
+	#print("Finished!")
 	
 	return [ meshes, mesh_names, texture_references ]
 	
@@ -393,7 +394,7 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 		var block = model.render_data.render_blocks[i]
 		texture_references_per_triangle = []
 		
-		mesh_names.append("RenderBlock %d" % i)
+		#mesh_names.append("RenderBlock %d" % i)
 		
 		var previous_tri_count = 0
 		for j in range(0, len(block.sections)):
@@ -403,8 +404,12 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 #				"tri_end": j + section.triangle_count,
 #				"textures": section.textures, 
 #			})
-			for k in range(previous_tri_count, section.triangle_count):
+			for k in range(previous_tri_count, previous_tri_count + section.triangle_count):
 				texture_references_per_triangle.append(section.textures)
+			
+			previous_tri_count += section.triangle_count
+			
+			
 		
 		var verts = []#PoolVector3Array()
 		var uvs = []#PoolVector2Array()
@@ -414,8 +419,37 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 		var indices = PoolIntArray()
 		var polies = []
 		
+		
 		for j in range(0, len(block.triangles)):
+				
+			#texture_references.append(texture_references_per_triangle[j][0])
+			texture_name = texture_references_per_triangle[j][0] # Grab the first texture for now..
+			
+			if prev_texture_name == "":
+				prev_texture_name = texture_name
+			
+			# Texture change? Flush!
+			if prev_texture_name != texture_name:
+	#				verts.invert()
+	#				normals.invert()
+	#				uvs.invert()
+	#				uvs2.invert()
+	#				colours.invert()
+				
+				# Add it to the batch!
+				if prev_texture_name in textured_meshes:
+					textured_meshes[prev_texture_name].append([ uvs, normals, verts, colours, [], [] ])
+				else:
+					textured_meshes[prev_texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
+				prev_texture_name = texture_name
+				
+				verts = []
+				uvs = []
+				normals = []
+				colours = []
+			
 			var triangle = block.triangles[j]
+			
 			
 			verts.append(triangle.render_vertices[0].pos)
 			verts.append(triangle.render_vertices[1].pos)
@@ -429,50 +463,25 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 			normals.append(triangle.render_vertices[1].normal)
 			normals.append(triangle.render_vertices[2].normal)
 			
-			texture_references.append(texture_references_per_triangle[j][0])
-			texture_name = texture_references_per_triangle[j][0] # Grab the first texture for now..
 			
-			if prev_texture_name == "":
-				prev_texture_name = texture_name
-			
-			# Texture change? Flush!
-			if prev_texture_name != texture_name:
-#				verts.invert()
-#				normals.invert()
-#				uvs.invert()
-#				uvs2.invert()
-#				colours.invert()
-				
-				# Add it to the batch!
-				if prev_texture_name in textured_meshes:
-					textured_meshes[prev_texture_name].append([ uvs, normals, verts, colours, [], [] ])
-				else:
-					textured_meshes[prev_texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
-				prev_texture_name = texture_name
-				
-				verts = []
-				uvs = []
-				normals = []
-				colours = []
 						
 			#colours.append(255)
 			#colours.append(triangle.render_vertices[0].colour)
 			#colours.append(triangle.render_vertices[1].colour)
 			#colours.append(triangle.render_vertices[2].colour)
 			
-		# Note : Disabled while debugging vertex order
-#		# Add it to the batch! (Last one!)
-#		if texture_name in textured_meshes:
-#			textured_meshes[texture_name].append([ uvs, normals, verts, colours, [], [] ])
-#		else:
-#			textured_meshes[texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
+		# Add it to the batch! (Last one!)
+		if texture_name in textured_meshes:
+			textured_meshes[texture_name].append([ uvs, normals, verts, colours, [], [] ])
+		else:
+			textured_meshes[texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
 
 			
 		var data = build_array_mesh_jupiter(textured_meshes)
 		meshes += data[0]
 		mesh_names += data[1]
 		texture_references += data[2]
-		textured_meshes = []
+		textured_meshes = {}
 	
 	# Texture References is polygon aligned
 	return [ meshes, mesh_names, texture_references, null ]
@@ -779,7 +788,7 @@ func fill_array_mesh(model, world_models = []):
 	mesh_names += data[1]
 	texture_references += data[2]
 
-	var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
+	#var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
 	
 	#print("Exporting obj...")
 	#obj_exporter.export_mesh(meshes, "./test.obj", true)

@@ -1373,6 +1373,91 @@ class DAT:
 					block.vertices[self.index1],
 					block.vertices[self.index2],
 				]
+				
+		class RenderSkyPortal:
+			var vert_count = 0
+			var verts = []
+			var plane_pos = Vector3()
+			var plane_dist = 0.0
+			
+			func read(dat : DAT, f : File):
+				self.vert_count = f.get_8()
+				for i in range(vert_count):
+					var vert = dat.read_vector3(f)
+					verts.append(vert)
+				self.plane_pos = dat.read_vector3(f)
+				self.plane_dist = f.get_float()
+				
+		class RenderOcculder:
+			var vert_count = 0
+			var verts = []
+			var plane_pos = Vector3()
+			var plane_dist = 0.0
+
+			var id = 0
+			var enabled = false
+			
+			func read(dat : DAT, f : File):
+				self.vert_count = f.get_8()
+				for i in range(vert_count):
+					var vert = dat.read_vector3(f)
+					verts.append(vert)
+				self.plane_pos = dat.read_vector3(f)
+				self.plane_dist = f.get_float()
+				
+				self.id = f.get_32()
+				#self.enabled = f.get_8()
+			
+		class RenderLightGroup:
+			var length = 0
+			var next_char = []
+			var colour = Vector3()
+			var data_length = 0
+			var data = []
+			var section_lm_size = 0
+			var sub_lms = []
+			
+			func read(dat : DAT, f : File):
+				self.length = f.get_16()
+				for i in range(self.length):
+					next_char.append(f.get_8())
+				self.colour = dat.read_vector3(f)
+				self.data_length = f.get_32()
+				for i in range(self.data_length):
+					data.append(f.get_8())
+				self.section_lm_size = f.get_32()
+				for i in range(self.section_lm_size):
+					var sub_lm = SubLightmapHeader.new()
+					sub_lm.read(dat, f)
+					sub_lms.append(sub_lm)
+			
+			class SubLightmap:
+				var left = 0
+				var top = 0
+				var width = 0
+				var height = 0
+				var data_size = 0
+				var data = []
+				
+				func read(dat : DAT, f : File):
+					self.left = f.get_32()
+					self.top = f.get_32()
+					self.width = f.get_32()
+					self.height = f.get_32()
+					self.data_size = f.get_32()
+					for i in range(self.data_size):
+						self.data.append(f.get_8())
+			
+			class SubLightmapHeader:
+				var count = 0
+				var sub_lms = []
+				
+				func read(dat : DAT, f : File):
+					self.count = f.get_32()
+					for i in range(self.count):
+						var sub_lm = SubLightmap.new()
+						sub_lm.read(dat, f)
+						sub_lms.append(sub_lm)
 
 		class RenderBlock:
 			var center = Vector3()
@@ -1380,10 +1465,19 @@ class DAT:
 			var section_count = 0
 			var vertex_count = 0
 			var triangle_count = 0
+			var sky_portal_count = 0
+			var occulder_count = 0
+			var light_group_count = 0
 			
 			var sections = []
 			var vertices = []
 			var triangles = []
+			var sky_portals = []
+			var occulders = []
+			var light_groups = []
+			
+			var child_flags = 0
+			var child_indexes = []
 			
 			func read(dat : DAT, f : File):
 				self.center = dat.read_vector3(f)
@@ -1406,6 +1500,28 @@ class DAT:
 					var triangle = RenderTriangle.new()
 					triangle.read(dat, f, self)
 					self.triangles.append(triangle)
+				
+				self.sky_portal_count = f.get_32()
+				for i in range(self.sky_portal_count):
+					var sky_portal = RenderSkyPortal.new()
+					sky_portal.read(dat, f)
+					self.sky_portals.append(sky_portal)
+					
+				self.occulder_count = f.get_32()
+				for i in range(self.occulder_count):
+					var occulder = RenderOcculder.new()
+					occulder.read(dat, f)
+					self.occulders.append(occulder)
+				
+				self.light_group_count = f.get_32()
+				for i in range(self.light_group_count):
+					var light_group = RenderLightGroup.new()
+					light_group.read(dat, f)
+					self.light_groups.append(light_group)
+				
+				self.child_flags = f.get_8()
+				self.child_indexes.append(f.get_32())
+				self.child_indexes.append(f.get_32())
 				
 				pass
 			# End Func

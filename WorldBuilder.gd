@@ -334,20 +334,31 @@ func build_array_mesh_jupiter(textured_meshes):
 			var mesh_colours = mesh[3]
 			var mesh_uvs2 = mesh[5]
 			
-#			st.add_normal(mesh_normals[0])
-#			st.add_uv(mesh_uvs[0])
-#			st.add_vertex(mesh_verts[0])
-#
-#			st.add_normal(mesh_normals[1])
-#			st.add_uv(mesh_uvs[1])
-#			st.add_vertex(mesh_verts[1])
-#
-#			st.add_normal(mesh_normals[2])
-#			st.add_uv(mesh_uvs[2])
-#			st.add_vertex(mesh_verts[2])
-			
-			# Mesh is formatted in triangle fan segments per "EditPoly"
-			st.add_triangle_fan( PoolVector3Array(mesh_verts), PoolVector2Array(mesh_uvs), PoolColorArray(mesh_colours), PoolVector2Array(mesh_uvs2), PoolVector3Array(mesh_normals) )
+			mesh_uvs.invert()
+			mesh_normals.invert()
+			mesh_verts.invert()
+
+			# Pack in 3 verts at a time!
+			var i = 0
+			while (i < len(mesh_verts) - 2):
+				var i0 = i
+				var i1 = i + 1
+				var i2 = i + 2
+
+				st.add_normal(mesh_normals[i0])
+				st.add_uv(mesh_uvs[i0])
+				st.add_vertex(mesh_verts[i0])
+
+				st.add_normal(mesh_normals[i1])
+				st.add_uv(mesh_uvs[i1])
+				st.add_vertex(mesh_verts[i1])
+
+				st.add_normal(mesh_normals[i2])
+				st.add_uv(mesh_uvs[i2])
+				st.add_vertex(mesh_verts[i2])
+				
+				i += 3
+			# End While
 		# End For
 		
 		meshes.append(st.commit())

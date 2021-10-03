@@ -157,8 +157,10 @@ class DAT:
 		world_object_data = WorldObjectHeader.new()
 		world_object_data.read(self, f)
 		
-		# Okay back to world models
-		f.seek(world_model_pos)
+		# World model position is not where it is in lt1!
+		if !is_lithtech_1():
+			# Okay back to world models
+			f.seek(world_model_pos)
 			
 		if is_lithtech_1():
 			# Read the "root" world model
@@ -1324,6 +1326,41 @@ class DAT:
 			var lightmap_height
 			var lightmap_size
 			var lightmap_data = []
+			var lightmap_texture = null
+			
+			func decode_lm():
+				var lm_data = PoolByteArray()
+				var current_pos = 0
+				
+				while current_pos < self.lightmap_size:
+					var tag = lightmap_data[current_pos]
+					current_pos += 1
+					
+					var is_run = (tag & 0x80) > 0
+					var run_length = (tag & 0x7f) + 1
+					
+					for i in range(run_length):
+						lm_data.append(current_pos + 0) 
+						lm_data.append(current_pos + 1)
+						lm_data.append(current_pos + 2)
+						
+						if !is_run:
+							current_pos += 3
+						# End For
+					# End For
+					if is_run:
+						current_pos += 3
+					# End If
+				# End While
+				
+				# Make sure the lengths line-up!
+				assert(current_pos == self.lightmap_size)
+
+				var image = Image.new()
+				image.create_from_data(self.lightmap_width, self.lightmap_height, false, Image.FORMAT_RGB8, lm_data)
+				image.save_png("./lm_data.png")
+				self.lightmap_texture = ImageTexture.new()
+				self.lightmap_texture.create_from_image(image)
 			
 			func read(dat : DAT, f : File):
 				self.textures = [
@@ -1338,20 +1375,39 @@ class DAT:
 				self.lightmap_height = f.get_32()
 				self.lightmap_size = f.get_32()
 				self.lightmap_data = f.get_buffer(self.lightmap_size)
+				
+				if (self.lightmap_size > 0):
+					self.decode_lm()
+		
+#define RGBA_GETA(color)			((uint8)( color               >> 24))
+#define RGBA_GETR(color)			((uint8)((color & 0x00FF0000) >> 16))
+#define RGBA_GETG(color)			((uint8)((color & 0x0000FF00) >> 8 ))
+#define RGBA_GETB(color)			((uint8)((color & 0x000000FF)      ))
 		
 		class RenderVertex:
 			var pos = Vector3()
 			var uv1 = Vector2()
 			var uv2 = Vector2()
-			var colour = 0 # Packed colour!
+			#var colour = 0 # Packed colour!
+			var packed_colour = 0
+			var colour = Color()
 			var normal = Vector3()
+			
+			func unpack_colour():
+				self.colour.a = (self.packed_colour >> 24)
+				self.colour.r = ((self.packed_colour & 0x00FF0000) >> 16)
+				self.colour.g = ((self.packed_colour & 0x0000FF00) >> 8 )
+				self.colour.b = (self.packed_colour & 0x000000FF)
+				
 			
 			func read(dat : DAT, f : File):
 				self.pos = dat.read_vector3(f)
 				self.uv1 = dat.read_vector2(f)
 				self.uv2 = dat.read_vector2(f)
-				self.colour = f.get_32()
+				self.packed_colour = f.get_32()
 				self.normal = dat.read_vector3(f)
+				
+				self.unpack_colour()
 		
 		class RenderTriangle:
 			var index0 = 0

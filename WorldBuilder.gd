@@ -133,12 +133,12 @@ func build(source_file, options):
 		var meshes = data[0]
 		var mesh_names = data[1]
 		var tex_names = data[2]
-		var lm_texture_array = data[3] as Image#[0] # data[3] = [ tex array, last used depth ]
+		var lm_texture_array = data[3]# as ImageTexture#[0] # data[3] = [ tex array, last used depth ]
 		
 		# Loop through our pieces, and add them to mesh instances
 		#lm_texture_array.save_png("lm_null.png")
 		
-		var lm_image_texture = ImageTexture.new()
+		#var lm_image_texture = ImageTexture.new()
 		#lm_image_texture.create_from_image(lm_texture_array)
 
 		#lm_image_texture.set_flags(ImageTexture.FLAGS_DEFAULT + ImageTexture.FLAG_ANISOTROPIC_FILTER + ImageTexture.FLAG_CONVERT_TO_LINEAR)
@@ -151,8 +151,13 @@ func build(source_file, options):
 			var mesh_instance = MeshInstance.new()
 			
 			var tex_name = tex_names[i]
-			var tex = get_texture(tex_name)
+			var tex = null
 			
+			if "LightAnim_" in tex_name:
+				tex = lm_texture_array[i]
+			else:
+				tex = get_texture(tex_name)
+
 			var mat = ShaderMaterial.new()
 			mat.shader = load("res://Addons/LTDatReader/Shaders/LT1.tres") as VisualShader
 			
@@ -325,6 +330,15 @@ func build_array_mesh_jupiter(textured_meshes):
 	for texture in textured_meshes.keys():
 		var batches = textured_meshes[texture]
 		
+		var use_lightmap_texture = false
+		
+		#if "LightAnim_" in texture:
+		#	use_lightmap_texture = true
+		
+		# No lightmaps right now!
+		if "LightAnim_" in texture:
+			continue 
+		
 		var commit_mesh = null
 		var combined_mesh = null
 		
@@ -334,6 +348,11 @@ func build_array_mesh_jupiter(textured_meshes):
 			var mesh_verts = mesh[2]
 			var mesh_colours = mesh[3]
 			var mesh_uvs2 = mesh[5]
+			
+			var lightmap_texture = null
+			
+			if use_lightmap_texture:
+				lightmap_texture = mesh[4]
 			
 			mesh_uvs.invert()
 			mesh_normals.invert()
@@ -348,14 +367,17 @@ func build_array_mesh_jupiter(textured_meshes):
 
 				st.add_normal(mesh_normals[i0])
 				st.add_uv(mesh_uvs[i0])
+				#st.add_color(mesh_colours[i0])
 				st.add_vertex(mesh_verts[i0])
 
 				st.add_normal(mesh_normals[i1])
 				st.add_uv(mesh_uvs[i1])
+				#st.add_color(mesh_colours[i1])
 				st.add_vertex(mesh_verts[i1])
 
 				st.add_normal(mesh_normals[i2])
 				st.add_uv(mesh_uvs[i2])
+				#st.add_color(mesh_colours[i2])
 				st.add_vertex(mesh_verts[i2])
 				
 				i += 3
@@ -367,14 +389,8 @@ func build_array_mesh_jupiter(textured_meshes):
 		st.clear()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		texture_references.append(texture)
-		mesh_names.append("World Model")#world_model.world_name)
+		mesh_names.append("Render Data - %s" % texture)
 	# End For
-
-	#var obj_exporter = load("res://Src/obj_exporter.gd").OBJExporter.new()
-	
-	#print("Exporting obj...")
-	#obj_exporter.export_mesh(meshes, "./test.obj", true)
-	#print("Finished!")
 	
 	return [ meshes, mesh_names, texture_references ]
 	
@@ -389,6 +405,8 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 	
 	var texture_name = ""
 	var prev_texture_name = ""
+	
+	var lightmap_textures = []
 
 	for i in range(0, len(model.render_data.render_blocks)):
 		var block = model.render_data.render_blocks[i]
@@ -406,6 +424,8 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 #			})
 			for k in range(previous_tri_count, previous_tri_count + section.triangle_count):
 				texture_references_per_triangle.append(section.textures)
+				# I'm hoping this is a reference...
+				#lightmap_textures.append(section.lightmap_texture)
 			
 			previous_tri_count += section.triangle_count
 			
@@ -418,23 +438,19 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 		var colours = []
 		var indices = PoolIntArray()
 		var polies = []
+		var previous_lightmap_texture = null
 		
+
 		
 		for j in range(0, len(block.triangles)):
-				
-			#texture_references.append(texture_references_per_triangle[j][0])
 			texture_name = texture_references_per_triangle[j][0] # Grab the first texture for now..
+			
 			
 			if prev_texture_name == "":
 				prev_texture_name = texture_name
 			
 			# Texture change? Flush!
 			if prev_texture_name != texture_name:
-	#				verts.invert()
-	#				normals.invert()
-	#				uvs.invert()
-	#				uvs2.invert()
-	#				colours.invert()
 				
 				# Add it to the batch!
 				if prev_texture_name in textured_meshes:
@@ -463,19 +479,16 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 			normals.append(triangle.render_vertices[1].normal)
 			normals.append(triangle.render_vertices[2].normal)
 			
-			
-						
-			#colours.append(255)
-			#colours.append(triangle.render_vertices[0].colour)
-			#colours.append(triangle.render_vertices[1].colour)
-			#colours.append(triangle.render_vertices[2].colour)
+			colours.append(triangle.render_vertices[0].colour)
+			colours.append(triangle.render_vertices[1].colour)
+			colours.append(triangle.render_vertices[2].colour)
 			
 		# Add it to the batch! (Last one!)
 		if texture_name in textured_meshes:
 			textured_meshes[texture_name].append([ uvs, normals, verts, colours, [], [] ])
 		else:
 			textured_meshes[texture_name] = [[ uvs, normals, verts, colours, [], [] ]]
-
+			
 			
 		var data = build_array_mesh_jupiter(textured_meshes)
 		meshes += data[0]
@@ -484,7 +497,7 @@ func fill_array_mesh_jupiter(model, world_meshes = []):
 		textured_meshes = {}
 	
 	# Texture References is polygon aligned
-	return [ meshes, mesh_names, texture_references, null ]
+	return [ meshes, mesh_names, texture_references, lightmap_textures ]
 	
 	pass
 

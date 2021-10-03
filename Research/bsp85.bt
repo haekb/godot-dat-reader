@@ -349,8 +349,9 @@ struct SRBGeometryPoly {
 };
 
 struct SRCOcculder {
+    SRBGeometryPoly Poly;
     uint32 ID;
-    uchar Enabled;
+    //uchar Enabled;
 };
 
 struct SSubLM {
